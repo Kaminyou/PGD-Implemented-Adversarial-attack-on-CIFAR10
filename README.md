@@ -15,7 +15,7 @@ Please prepare your cifar-10 normal example and put all the classes in different
 <a>    ...</a><br />
 ## Generate adversarial example
 <br />
-    python3 main.py -I input_normal_examples_path -M model -T mode -O adversarial_examples_folder_name
+    $python3 main.py -I input_normal_examples_path -M model -T mode -O adversarial_examples_folder_name
 <br />
 model: vgg16_bn, resnet50, mobilenet_v2, densenet161<br />
 mode: PGD, FGSM<br />
@@ -24,6 +24,6 @@ mode: PGD, FGSM<br />
 
 ## Investigate transferability
 <br />
-    python3 transferability.py -I input_normal_examples_path -O 1or0
+    $python3 transferability.py -I input_normal_examples_path -O 1or0
 <br />
 O: if generate confusion table or not
