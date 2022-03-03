@@ -1,25 +1,83 @@
-import os
-import shutil
-import cv2
+from argparse import ArgumentParser
+
+import matplotlib.pyplot as plt
 import numpy as np
-import pickle
-import copy
+import pandas as pd
+import seaborn as sns
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-import torchvision
 import torchvision.transforms as transforms
-from tqdm import tqdm as pbar
+
 from cifar10_models import *
 from utils import *
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-from skimage.util import random_noise
-import time
-from argparse import ArgumentParser
+
+
+class TransferAttacker:
+    def __init__(self, model, data, label):
+        self.data_len = len(data)
+        self.model = model
+        self.model.to(device)
+        self.model.eval()
+        self.mean = [0.4914, 0.4822, 0.4465]
+        self.std = [0.2023, 0.1994, 0.2010]
+        self.normalize = transforms.Normalize(self.mean, self.std, inplace=False)
+        transform = transforms.Compose([
+                        transforms.ToPILImage(),
+                        transforms.ToTensor(),
+                        self.normalize
+                    ])
+        self.dataset = Adverdataset(data, label, transform)
+        
+        self.loader = torch.utils.data.DataLoader(
+                self.dataset,
+                batch_size = 20,
+                shuffle = False)
+        
+    def evaluation(self):
+        accuracy = 0
+        for now, (data, target) in enumerate(self.loader):
+            print(str(now) + "|" +str(len(self.loader)), end="\r")
+            data, target = data.to(device), target.to(device)
+            data_raw = data
+            
+            # initial prediction
+            output = self.model(data)
+            init_pred = output.max(1, keepdim=True)[1].squeeze()
+            accuracy += torch.sum(init_pred == target).cpu().numpy()
+        print("Accuracy: {} / {}".format(accuracy, self.data_len))
+        accuracy = accuracy/self.data_len
+        return accuracy
+
+def transfer_attack(image_path, model_name, pretrained = True):
+    """
+    Evaluation model with given data
+    image_path: path of the data(image)
+    model_name: vgg16_bn, resnet50, mobilenet_v2, densenet161
+    
+    """
+    model_test = select_model(model_name, pretrained)
+    data, labels, categorys, images_name = read_eval_image(image_path)
+    evaluation = TransferAttacker(model_test, data, labels)
+    accuracy = evaluation.evaluation()
+    return accuracy
+
+def select_model(model, pretrained = False, use_cuda = True):
+    device = torch.device("cuda" if (use_cuda and torch.cuda.is_available()) else "cpu")
+    if model == "vgg16_bn":
+        return vgg16_bn(pretrained = pretrained, device = device)
+    elif model == "resnet50":
+        return resnet50(pretrained = pretrained, device = device)
+    elif model == "mobilenet_v2":
+        return mobilenet_v2(pretrained = pretrained, device = device)
+    elif model == "densenet161":
+        return densenet161(pretrained = pretrained, device = device)
+    
+    elif model == "densenet161_gaussian":
+        output_model = densenet161(pretrained = False, device = device)
+        state_dict = torch.load('cifar10_models/state_dicts/'+model+'.pt', map_location=device)
+        output_model.load_state_dict(state_dict)
+        return output_model
+    else:
+        print("Unavailable model")
 
 cifar10_label_dict = {"airplane":0, "automobile":1, "bird":2, "cat":3, "deer":4, 
                       "dog":5, "frog":6, "horse":7, "ship":8, "truck":9}
